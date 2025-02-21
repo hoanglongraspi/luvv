@@ -8,11 +8,17 @@ const userSchema = new mongoose.Schema({
         required: true,
         unique: true
     },
+    email: {
+        type: String,
+        sparse: true,  // Allows null/undefined values
+        index: true,   // Creates an index
+        unique: true   // Makes the index unique
+    },
     password: {
         type: String,
         required: true
     }
-});
+}, { timestamps: true });
 
 // Hash password before saving
 userSchema.pre('save', async function(next) {
@@ -26,4 +32,4 @@ userSchema.methods.comparePassword = async function(candidatePassword) {
     return await bcrypt.compare(candidatePassword, this.password);
 };
 
-module.exports = mongoose.model('User', userSchema); 
+module.exports = mongoose.model('User', userSchema);

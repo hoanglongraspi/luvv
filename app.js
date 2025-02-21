@@ -36,11 +36,20 @@ app.use(session({
 }));
 
 // Authentication middleware
-const requireLogin = (req, res, next) => {
+const requireLogin = async (req, res, next) => {
     if (!req.session.userId) {
         return res.redirect('/login');
     }
-    next();
+    try {
+        const user = await User.findById(req.session.userId);
+        if (!user) {
+            return res.redirect('/login');
+        }
+        next();
+    } catch (error) {
+        console.error('Auth error:', error);
+        res.redirect('/login');
+    }
 };
 
 // Login routes
@@ -99,15 +108,23 @@ app.get('/logout', (req, res) => {
 app.get('/', requireLogin, async (req, res) => {
     try {
         const images = await Image.find().sort({ createdAt: -1 });
+        const user = await User.findById(req.session.userId);
+        
+        if (!user) {
+            return res.redirect('/login');
+        }
+
         res.render('index', {
-            images: images,
-            name: req.session.username || 'Guest',
-            theme: req.session.theme || 'blue',
-            userId: req.session.userId
+            images: images || [],
+            user: user,
+            theme: req.session.theme || 'blue'
         });
     } catch (error) {
         console.error('Error:', error);
-        res.status(500).send('Error fetching images');
+        res.status(500).render('error', { 
+            error: 'Error loading gallery',
+            user: { name: 'Guest' }
+        });
     }
 });
 
@@ -162,29 +179,26 @@ app.post('/register', async (req, res) => {
             return res.render('register', { error: 'Username must be at least 3 characters long' });
         }
 
-        if (!name || name.trim().length === 0) {
-            return res.render('register', { error: 'Name is required' });
-        }
-
         // Check if username already exists
         const existingUser = await User.findOne({ username });
         if (existingUser) {
             return res.render('register', { error: 'Username already exists' });
         }
 
-        // Create new user
+        // Create new user without email field
         const user = new User({
             name,
             username,
-            password // Password will be hashed by the pre-save hook
+            password
         });
 
         await user.save();
 
-        // Automatically log in after registration
+        // Auto login after registration
         req.session.userId = user._id;
-        req.session.name = user.name;  // Add name to session
+        req.session.name = user.name;
         res.redirect('/');
+
     } catch (error) {
         console.error('Registration error:', error);
         res.render('register', { error: 'An error occurred during registration' });
@@ -234,8 +248,12 @@ app.listen(port, () => {
 // Error handler middleware
 app.use((err, req, res, next) => {
     console.error(err);
-    res.status(err.status || 500).json({
-        error: process.env.NODE_ENV === 'production' ? 'Internal server error' : err.message
+    if (err.name === 'ReferenceError') {
+        return res.redirect('/login');
+    }
+    res.status(err.status || 500).render('error', {
+        error: process.env.NODE_ENV === 'production' ? 'Internal server error' : err.message,
+        name: req.session.name || 'Guest'
     });
 });
 

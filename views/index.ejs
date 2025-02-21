@@ -345,7 +345,7 @@
                 <span class="theme-icon">🎨</span>
                 Switch Theme
             </button>
-            <span class="welcome-message">Hi, <%= name %> 👋</span>
+            <span class="welcome-message">Hi <%= user ? user.name : 'Guest' %> 👋</span>
             <a href="/logout" class="logout-btn">Logout</a>
         </div>
     </div>
