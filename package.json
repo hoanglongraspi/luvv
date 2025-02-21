@@ -15,11 +15,14 @@
   "description": "",
   "dependencies": {
     "bcrypt": "^5.1.1",
+    "crypto": "^1.0.1",
+    "dotenv": "^16.4.7",
     "ejs": "^3.1.10",
     "express": "^4.21.1",
     "express-session": "^1.18.1",
     "method-override": "^3.0.0",
     "mongoose": "^8.8.2",
-    "multer": "^1.4.5-lts.1"
+    "multer": "^1.4.5-lts.1",
+    "nodemailer": "^6.10.0"
   }
 }

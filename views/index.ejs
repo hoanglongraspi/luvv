@@ -335,6 +335,22 @@
             padding-top: 8px;
             border-top: 1px solid #eee;
         }
+
+        /* Add this to your existing styles */
+        .settings-btn {
+            display: inline-flex;
+            align-items: center;
+            padding: 8px 15px;
+            background: var(--primary-color);
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            transition: background 0.3s;
+        }
+
+        .settings-btn:hover {
+            background: var(--primary-dark);
+        }
     </style>
 </head>
 <body>
@@ -345,6 +361,7 @@
                 <span class="theme-icon">🎨</span>
                 Switch Theme
             </button>
+            <a href="/settings" class="settings-btn" style="margin-right: 15px;">⚙️ Settings</a>
             <span class="welcome-message">Hi <%= user ? user.name : 'Guest' %> 👋</span>
             <a href="/logout" class="logout-btn">Logout</a>
         </div>

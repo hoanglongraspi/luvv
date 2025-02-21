@@ -150,14 +150,14 @@
 
         <form action="/login" method="POST">
             <div class="form-group">
-                <label for="username">Username</label>
+                <label for="username">Email or Username</label>
                 <input 
                     type="text" 
                     id="username" 
                     name="username" 
                     required 
+                    placeholder="Enter your email or username"
                     autocomplete="username"
-                    placeholder="Enter your username"
                 >
             </div>
 
@@ -189,6 +189,10 @@
 
             <button type="submit" class="login-btn">Login</button>
         </form>
+
+        <div class="forgot-password" style="text-align: center; margin-top: 15px;">
+            <a href="/forgot-password" style="color: #3498db; text-decoration: none;">Forgot your password?</a>
+        </div>
     </div>
 
     <script>
@@ -220,4 +224,4 @@
         });
     </script>
 </body>
-</html> 
+</html>

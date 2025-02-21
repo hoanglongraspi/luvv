@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Settings - Gallery App</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--primary-gradient, linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%));
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .settings-container {
+            max-width: 600px;
+            margin: 40px auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #34495e;
+            font-weight: 500;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+            box-sizing: border-box;
+        }
+
+        input:focus {
+            border-color: #3498db;
+            outline: none;
+        }
+
+        .save-btn {
+            background: #3498db;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            width: 100%;
+            font-size: 16px;
+            margin-top: 20px;
+            transition: background 0.3s;
+        }
+
+        .save-btn:hover {
+            background: #2980b9;
+        }
+
+        .back-btn {
+            display: inline-block;
+            padding: 10px 20px;
+            color: #3498db;
+            text-decoration: none;
+            margin-top: 20px;
+        }
+
+        .error-message {
+            background: #fde8e8;
+            color: #e74c3c;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .success-message {
+            background: #e8f8e8;
+            color: #2ecc71;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="settings-container">
+        <h1>User Settings</h1>
+
+        <% if (locals.error) { %>
+            <div class="error-message"><%= error %></div>
+        <% } %>
+
+        <% if (locals.success) { %>
+            <div class="success-message"><%= success %></div>
+        <% } %>
+
+        <form action="/settings" method="POST">
+            <div class="form-group">
+                <label for="name">Name</label>
+                <input 
+                    type="text" 
+                    id="name" 
+                    name="name" 
+                    value="<%= user.name %>" 
+                    required
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input 
+                    type="email" 
+                    id="email" 
+                    name="email" 
+                    value="<%= user.email %>" 
+                    required
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input 
+                    type="text" 
+                    id="username" 
+                    name="username" 
+                    value="<%= user.username %>" 
+                    required
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="currentPassword">Current Password (required to save changes)</label>
+                <input 
+                    type="password" 
+                    id="currentPassword" 
+                    name="currentPassword" 
+                    required
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="newPassword">New Password (leave blank to keep current)</label>
+                <input 
+                    type="password" 
+                    id="newPassword" 
+                    name="newPassword"
+                    minlength="6"
+                >
+            </div>
+
+            <button type="submit" class="save-btn">Save Changes</button>
+        </form>
+
+        <a href="/" class="back-btn">← Back to Gallery</a>
+    </div>
+</body>
+</html>

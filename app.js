@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const multer = require('multer');
 const path = require('path');
@@ -7,6 +8,8 @@ const Image = require('./imageModel');
 const session = require('express-session');
 const User = require('./models/User');
 const bcrypt = require('bcrypt');
+const crypto = require('crypto');
+const nodemailer = require('nodemailer');
 
 const app = express();
 app.set('view engine', 'ejs');
@@ -52,6 +55,15 @@ const requireLogin = async (req, res, next) => {
     }
 };
 
+// Configure nodemailer
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+    }
+});
+
 // Login routes
 app.get('/login', (req, res) => {
     // If user is already logged in, redirect to home
@@ -68,20 +80,30 @@ app.post('/login', async (req, res) => {
         // Basic validation
         if (!username || !password) {
             return res.render('login', { 
-                error: 'Please enter both username and password' 
+                error: 'Please enter both username/email and password' 
             });
         }
 
-        // Find user by username
-        const user = await User.findOne({ username });
+        // Find user by username or email (case insensitive)
+        const user = await User.findOne({
+            $or: [
+                { username: username },
+                { email: username.toLowerCase() }  // Convert email to lowercase
+            ]
+        });
+
         if (!user) {
-            return res.render('login', { error: 'Invalid username or password' });
+            return res.render('login', { 
+                error: 'Invalid username/email or password' 
+            });
         }
 
-        // Compare password
-        const isValidPassword = await bcrypt.compare(password, user.password);
+        // Use the comparePassword method from the User model
+        const isValidPassword = await user.comparePassword(password);
         if (!isValidPassword) {
-            return res.render('login', { error: 'Invalid username or password' });
+            return res.render('login', { 
+                error: 'Invalid username/email or password' 
+            });
         }
 
         // Set session data
@@ -94,7 +116,9 @@ app.post('/login', async (req, res) => {
 
     } catch (error) {
         console.error('Login error:', error);
-        res.render('login', { error: 'An error occurred during login' });
+        res.render('login', { 
+            error: 'An error occurred during login' 
+        });
     }
 });
 
@@ -164,32 +188,46 @@ app.get('/register', (req, res) => {
 
 app.post('/register', async (req, res) => {
     try {
-        const { username, password, confirmPassword, name } = req.body;
+        const { username, password, confirmPassword, name, email } = req.body;
 
         // Validation
-        if (password !== confirmPassword) {
-            return res.render('register', { error: 'Passwords do not match' });
+        if (!email || !username || !password || !name) {
+            return res.render('register', { 
+                error: 'All fields are required'
+            });
         }
 
-        if (password.length < 6) {
-            return res.render('register', { error: 'Password must be at least 6 characters long' });
+        // Email format validation
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            return res.render('register', { 
+                error: 'Please enter a valid email address' 
+            });
         }
 
-        if (username.length < 3) {
-            return res.render('register', { error: 'Username must be at least 3 characters long' });
-        }
+        // Check for existing user
+        const existingUser = await User.findOne({
+            $or: [
+                { email: email.toLowerCase() },
+                { username: username }
+            ]
+        });
 
-        // Check if username already exists
-        const existingUser = await User.findOne({ username });
         if (existingUser) {
-            return res.render('register', { error: 'Username already exists' });
+            if (existingUser.email === email.toLowerCase()) {
+                return res.render('register', { error: 'Email already registered' });
+            }
+            if (existingUser.username === username) {
+                return res.render('register', { error: 'Username already exists' });
+            }
         }
 
-        // Create new user without email field
+        // Create new user
         const user = new User({
-            name,
-            username,
-            password
+            name: name,
+            username: username,
+            email: email.toLowerCase(),
+            password: password
         });
 
         await user.save();
@@ -201,7 +239,145 @@ app.post('/register', async (req, res) => {
 
     } catch (error) {
         console.error('Registration error:', error);
-        res.render('register', { error: 'An error occurred during registration' });
+        res.render('register', { 
+            error: error.message || 'An error occurred during registration' 
+        });
+    }
+});
+
+// Add this route to handle theme updates
+app.post('/update-theme', (req, res) => {
+    const { theme } = req.body;
+    if (theme) {
+        req.session.theme = theme;
+        res.json({ success: true });
+    } else {
+        res.status(400).json({ success: false, error: 'Theme not provided' });
+    }
+});
+
+// Forgot password routes
+app.get('/forgot-password', (req, res) => {
+    res.render('forgot-password', {
+        error: null,
+        success: null
+    });
+});
+
+app.post('/forgot-password', async (req, res) => {
+    try {
+        const { email } = req.body;
+        if (!email) {
+            return res.render('forgot-password', {
+                error: 'Please enter your email address',
+                success: null
+            });
+        }
+
+        const user = await User.findOne({ email: email.toLowerCase() });
+        if (!user) {
+            return res.render('forgot-password', {
+                error: 'No account with that email address exists',
+                success: null
+            });
+        }
+
+        const token = crypto.randomBytes(32).toString('hex');
+        user.resetPasswordToken = token;
+        user.resetPasswordExpires = Date.now() + 3600000; // 1 hour
+        await user.save();
+
+        const resetUrl = `http://${req.headers.host}/reset-password/${token}`;
+        
+        const mailOptions = {
+            from: process.env.EMAIL_USER,
+            to: user.email,
+            subject: 'Password Reset Request',
+            html: `
+                <h2>Password Reset Request</h2>
+                <p>You are receiving this because you (or someone else) requested a password reset.</p>
+                <p>Please click the button below to reset your password:</p>
+                <a href="${resetUrl}" style="background-color: #4CAF50; color: white; padding: 14px 20px; text-align: center; text-decoration: none; display: inline-block; border-radius: 4px;">Reset Password</a>
+                <p>If you did not request this, please ignore this email.</p>
+            `
+        };
+
+        await transporter.sendMail(mailOptions);
+        res.render('forgot-password', {
+            error: null,
+            success: 'An email has been sent with further instructions.'
+        });
+
+    } catch (error) {
+        console.error('Password reset error:', error);
+        res.render('forgot-password', {
+            error: 'An error occurred. Please try again.',
+            success: null
+        });
+    }
+});
+
+app.get('/reset-password/:token', async (req, res) => {
+    try {
+        const user = await User.findOne({
+            resetPasswordToken: req.params.token,
+            resetPasswordExpires: { $gt: Date.now() }
+        });
+
+        if (!user) {
+            return res.render('reset-password', {
+                error: 'Password reset token is invalid or has expired.',
+                token: null
+            });
+        }
+
+        res.render('reset-password', {
+            error: null,
+            token: req.params.token
+        });
+    } catch (error) {
+        res.render('reset-password', {
+            error: 'An error occurred',
+            token: null
+        });
+    }
+});
+
+app.post('/reset-password/:token', async (req, res) => {
+    try {
+        const { password, confirmPassword } = req.body;
+
+        if (password !== confirmPassword) {
+            return res.render('reset-password', {
+                error: 'Passwords do not match',
+                token: req.params.token
+            });
+        }
+
+        const user = await User.findOne({
+            resetPasswordToken: req.params.token,
+            resetPasswordExpires: { $gt: Date.now() }
+        });
+
+        if (!user) {
+            return res.render('reset-password', {
+                error: 'Password reset token is invalid or has expired.',
+                token: null
+            });
+        }
+
+        user.password = password;
+        user.resetPasswordToken = undefined;
+        user.resetPasswordExpires = undefined;
+        await user.save();
+
+        res.redirect('/login');
+    } catch (error) {
+        console.error('Reset password error:', error);
+        res.render('reset-password', {
+            error: 'An error occurred while resetting your password.',
+            token: req.params.token
+        });
     }
 });
 
@@ -211,6 +387,118 @@ app.get('/', (req, res) => {
     });
 });
 
+// Add these routes after your existing routes
+app.get('/settings', requireLogin, async (req, res) => {
+    try {
+        const user = await User.findById(req.session.userId);
+        if (!user) {
+            return res.redirect('/login');
+        }
+        
+        res.render('settings', {
+            user: user,
+            error: null,
+            success: null
+        });
+    } catch (error) {
+        console.error('Settings error:', error);
+        res.render('error', { 
+            error: 'Error loading settings',
+            name: req.session.name || 'Guest'
+        });
+    }
+});
+
+app.post('/settings', requireLogin, async (req, res) => {
+    try {
+        const { name, email, username, currentPassword, newPassword } = req.body;
+        const user = await User.findById(req.session.userId);
+
+        if (!user) {
+            return res.redirect('/login');
+        }
+
+        // Verify current password
+        const isValidPassword = await user.comparePassword(currentPassword);
+        if (!isValidPassword) {
+            return res.render('settings', {
+                user: user,
+                error: 'Current password is incorrect',
+                success: null
+            });
+        }
+
+        // Check if email or username already exists
+        if (email !== user.email || username !== user.username) {
+            const existingUser = await User.findOne({
+                $or: [
+                    { email: email.toLowerCase(), _id: { $ne: user._id } },
+                    { username: username, _id: { $ne: user._id } }
+                ]
+            });
+
+            if (existingUser) {
+                if (existingUser.email === email.toLowerCase()) {
+                    return res.render('settings', {
+                        user: user,
+                        error: 'Email already in use',
+                        success: null
+                    });
+                }
+                if (existingUser.username === username) {
+                    return res.render('settings', {
+                        user: user,
+                        error: 'Username already taken',
+                        success: null
+                    });
+                }
+            }
+        }
+
+        // Update user information
+        user.name = name;
+        user.email = email.toLowerCase();
+        user.username = username;
+
+        // Update password if provided
+        if (newPassword) {
+            user.password = newPassword;
+        }
+
+        await user.save();
+
+        // Update session
+        req.session.name = user.name;
+
+        res.render('settings', {
+            user: user,
+            error: null,
+            success: 'Settings updated successfully'
+        });
+
+    } catch (error) {
+        console.error('Settings update error:', error);
+        res.render('settings', {
+            user: req.user,
+            error: 'An error occurred while updating settings',
+            success: null
+        });
+    }
+});
+
+// Error handler middleware
+app.use((err, req, res, next) => {
+    console.error(err);
+    if (err.name === 'ReferenceError') {
+        return res.redirect('/login');
+    }
+    res.status(err.status || 500).render('error', {
+        error: process.env.NODE_ENV === 'production' ? 'Internal server error' : err.message,
+        name: req.session.name || 'Guest'
+    });
+});
+
+// Move the 404 handler to the end
 app.use((req, res) => {
     res.status(404).render('error', { 
         error: 'Page not found',
@@ -243,29 +531,6 @@ app.get('/images/:id', requireLogin, async (req, res) => {
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
     console.log(`Server is running on port ${port}`);
-});
-
-// Error handler middleware
-app.use((err, req, res, next) => {
-    console.error(err);
-    if (err.name === 'ReferenceError') {
-        return res.redirect('/login');
-    }
-    res.status(err.status || 500).render('error', {
-        error: process.env.NODE_ENV === 'production' ? 'Internal server error' : err.message,
-        name: req.session.name || 'Guest'
-    });
-});
-
-// Add this route to handle theme updates
-app.post('/update-theme', (req, res) => {
-    const { theme } = req.body;
-    if (theme) {
-        req.session.theme = theme;
-        res.json({ success: true });
-    } else {
-        res.status(400).json({ success: false, error: 'Theme not provided' });
-    }
 });
 
 module.exports = app;
